@@ -1,0 +1,295 @@
+<!--
+Adam Castillo
+108485851
+Advanced Graphics
+Assignment5 WebGL
+ -->
+
+<html>
+<head>
+    <title>Project 5 &mdash; lesson 1</title>
+    <meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+    <script type="text/javascript" src="common/glMatrix-0.9.5.min.js"></script>
+    <script type="text/javascript" src="common/webgl-utils.js"></script>
+
+    <script id="shader-fs" type="x-shader/x-fragment">
+    precision mediump float;
+    varying vec3 color;
+    void main(void) {
+        gl_FragColor = vec4(1.0, 0.0, 1.0, 1.0);
+    }
+    </script>
+
+    <script id="shader-vs" type="x-shader/x-vertex">
+    attribute vec3 aVertexPosition;
+    uniform float angle;
+    varying vec3 color, mesh;
+    uniform mat4 uMVMatrix;
+    uniform mat4 uPMatrix;
+    void main(void) {
+    	color = aVertexPosition;
+    	mesh = aVertexPosition;
+    	mesh.y = sin(angle + mesh.x / 2.0 + mesh.z / 5.0);
+        gl_Position = uPMatrix * uMVMatrix * vec4(mesh.x, mesh.y, color.z, 1.0);
+    }
+    </script>
+
+    <script type="text/javascript">
+        var gl;             // gl handler
+        var shaderProgram;  // shader program
+        var currentlyPressedKeys = {}; // keyboard
+        var mvMatrix = mat4.create();  // 4 by 4 Matrix
+        var pMatrix = mat4.create();   // 4 by 4 Matrix
+        var positionBuffer;
+        var indexBuffer;
+        var indCount;
+
+        var then = 0;
+        var angle = 0;
+
+        function initGL(canvas) {
+            try {
+                gl = canvas.getContext("webgl");
+
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                gl.viewportWidth = window.innerWidth;
+                gl.viewportHeight = window.innerHeight;
+
+                initShaders();     // take care of my shader
+                initBuffers();     // handles vbos,pbos etc.
+
+                gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+                mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
+                mat4.identity(mvMatrix);
+
+            } catch (e) {
+            }
+            if (!gl) {
+                alert("Could not initialise WebGL");
+            }
+        }
+
+        /**************For the Shaders ***************/
+
+        function getShader(gl, id) {
+            var shaderScript = document.getElementById(id);
+            if (!shaderScript) {
+                return null;
+            }
+
+            var str = "";
+            var k = shaderScript.firstChild;
+            while (k) {
+                if (k.nodeType === 3) {
+                    str += k.textContent;
+                }
+                k = k.nextSibling;
+            }
+
+            var shader;
+            if (shaderScript.type === "x-shader/x-fragment") {
+                shader = gl.createShader(gl.FRAGMENT_SHADER);
+            } else if (shaderScript.type === "x-shader/x-vertex") {
+                shader = gl.createShader(gl.VERTEX_SHADER);
+            } else {
+                return null;
+            }
+
+            gl.shaderSource(shader, str);
+            gl.compileShader(shader);
+
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.log(gl.getShaderInfoLog(shader));
+                return null;
+            }
+
+            return shader;
+        }
+
+        /************** Shader Init *********/
+
+        function initShaders() {
+
+            var fragmentShader = getShader(gl, "shader-fs");
+            var vertexShader = getShader(gl, "shader-vs");
+
+            shaderProgram = gl.createProgram();
+            gl.attachShader(shaderProgram, vertexShader);
+            gl.attachShader(shaderProgram, fragmentShader);
+            gl.linkProgram(shaderProgram);
+
+            if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+                console.log("Could not initialise shaders");
+            }
+
+            gl.useProgram(shaderProgram);  // optional
+
+            shaderProgram.vertexPositionAttribute = gl.getAttribLocation(shaderProgram, "aVertexPosition");
+            gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
+
+            shaderProgram.pMatrixUniform = gl.getUniformLocation(shaderProgram, "uPMatrix");
+            shaderProgram.mvMatrixUniform = gl.getUniformLocation(shaderProgram, "uMVMatrix");
+            shaderProgram.angle = gl.getUniformLocation(shaderProgram, "angle"); //pass angle to shader
+
+        }
+
+        /************** setting model view Matrix ****/
+
+        function setMatrixUniforms() {
+            gl.uniformMatrix4fv(shaderProgram.pMatrixUniform, false, pMatrix);
+            gl.uniformMatrix4fv(shaderProgram.mvMatrixUniform, false, mvMatrix);
+        }
+
+        /************** Setting VBO *********/
+
+        function initBuffers() {
+            var rows = 15, columns = 30;
+            var vertices = [], indices = [];
+
+            // generate a bunch of vertices
+            var i = 0;
+            for (var r = 0; r < rows; ++r) {
+                for (var c = 0; c < columns; ++c) {
+                    vertices[i++] = c/2;
+                    vertices[i++] = 0;
+                    vertices[i++] = r/2;
+                }
+            }
+
+            positionBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.DYNAMIC_DRAW);
+
+
+            //generate mesh grid
+			/*
+			var i = 0;
+			for(var r = 0;  r < rows-1; r++)
+			{
+				if(r > 0)
+				{
+					indices[i++] = r * rows; 
+				}
+
+				for(var c = 0; c < columns; c++)
+				{
+					indices[i++] = r * rows + c; 
+					indices[i++] = (r + 1) * rows + c; 
+				}
+				
+				if(r < rows-2)
+				{
+					indices[i++] = (r+1) * rows + (columns-1);
+				}
+			
+			}
+			*/
+            var i = 0;
+            for (var r = 0; r <  rows-1; r++) {
+                  if(c/2 == 0)
+                  {
+              for (var c = 0; c < columns; c++) {
+                    indices[i++] = r * columns + c;
+                    indices[i++] = (r + 1) * columns + c;
+                  }
+
+                  }
+                  else {
+
+                    for(var c = columns-1; c > 0; c--)
+                    {
+                      indices[i++] = (r+1) * columns + c;
+                      indices[i++] = r * columns + c-1;
+
+                    }
+                }
+               }
+
+            indCount = indices.length;
+            indexBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.DYNAMIC_DRAW);
+        }
+
+        /************ Draw the Contents******/
+
+        function drawScene() {
+
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+            mat4.identity(mvMatrix);
+            //mat4.translate(mvMatrix, [-10.0, -2.0, -5.0]);
+            mat4.translate(mvMatrix, [-7.0, -2, -10.0]);
+            //mat4.rotate(mvMatrix, 1, [-1, 0, 0]);// axis to rotate around
+            mat4.rotate(mvMatrix, 0, [-3, 0, 0]);// axis to rotate around
+
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, 3, gl.FLOAT, false, 0, 0);
+            gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
+
+            gl.uniform1f(shaderProgram.angle, angle);
+
+            // Tell WebGL which indices to use to index the vertices
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+
+            setMatrixUniforms();   // passing matrixes to the shader
+            gl.drawElements(gl.LINE_STRIP, indCount, gl.UNSIGNED_SHORT, 0);
+            requestAnimationFrame(render);
+        }
+
+        /*********************************************/
+
+        function render(now) {
+            now *= 0.001;  // convert to seconds
+            angle +=0.02;
+            var deltaTime = now - then;
+            then = now;
+            requestAnimationFrame(drawScene);
+        }
+
+        /********** Linking functions on page load***/
+
+        function webGLStart() {
+            var canvas = document.getElementById("webgl");
+            initGL(canvas);    // where you draw stuff
+
+            gl.clearColor(0.0, 0.0, 0.0, 1.0);
+            gl.enable(gl.DEPTH_TEST);
+            drawScene();
+            window.addEventListener('resize', screen_resize);
+        }
+
+        /************************************/
+
+        function handleKeyDown(event) {
+            currentlyPressedKeys[event.keyCode] = true;
+            //  console.log(event.keyCode);
+            handleKeys();
+        }
+
+        function handleKeyUp(event) {
+            currentlyPressedKeys[event.keyCode] = false;
+        }
+
+        function screen_resize() {
+            // webGLStart();
+            var canvas = document.getElementById("webgl");
+            initGL(canvas);
+            // initShaders();     // take care of my shader
+            drawScene();
+        }
+
+    </script>
+</head>
+
+<body onload="webGLStart();">
+
+<div id="screen">
+    <canvas id="webgl" style="border: none;"></canvas>
+</div>
+
+</body>
+
+</html>
